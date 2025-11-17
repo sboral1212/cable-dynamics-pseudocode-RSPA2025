@@ -1,0 +1,283 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning}
+\usepackage{hyperref}
+
+\title{\vspace{-1cm}
+\textbf{Electronic Supplementary Material (ESM S1)}\\[4pt]
+\large Pseudocode and Workflow for Periodic Cable Dynamics Solver}
+\date{}
+\author{}
+
+\begin{document}
+\maketitle
+
+\section*{Overview and Code Availability}
+
+The numerical simulations reported in the article
+\emph{``Modeling and Simulation of Periodic Cable Dynamics with Bending Stiffness Using Time-Domain and Multi-Harmonic Balance Methods''}
+rely on a MATLAB implementation that forms part of a larger, proprietary research
+codebase that is actively being developed for multiple future publications.
+For this reason, the full executable source code cannot be released publicly
+in its current form.
+
+To ensure transparency and reproducibility, this document provides a complete
+and self-contained \textbf{non-executable pseudocode description} of the computational
+workflow, including:
+\begin{itemize}
+  \item static configuration solver;
+  \item time-domain dynamic solver;
+  \item hydrodynamic force evaluation;
+  \item post-processing (shape reconstruction and fairlead tension).
+\end{itemize}
+The pseudocode and flow diagram below fully describe the numerical procedure
+and are sufficient for independent re-implementation of the methods presented
+in the paper.
+
+While the full MATLAB implementation is not publicly released, it may be shared
+with bona fide researchers upon reasonable request for academic, non-commercial
+use, subject to institutional and project constraints.
+
+\section*{Model Parameters}
+
+Table~\ref{tab:params} summarizes the main physical and numerical parameters.
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+Symbol & Description & Typical value \\ \midrule
+$N$       & Number of nodes along cable & $51$ \\
+$L$       & Unstretched cable length    & $902.2\,\mathrm{m}$ \\
+$EA$      & Axial stiffness             & $3.84243\times10^7\,\mathrm{N}$ \\
+$EI$      & Bending stiffness           & (given in main paper) \\
+$W$       & Submerged weight/length     & $698.094\,\mathrm{N/m}$ \\
+$\rho_w$  & Water density               & $1025\,\mathrm{kg/m^3}$ \\
+$d$       & Cable diameter              & $0.09\,\mathrm{m}$ \\
+$C_d^t$   & Tangential drag coefficient & $1.6$ \\
+$C_d^n$   & Normal drag coefficient     & $1.6$ \\
+$m$       & Structural mass/length      & $77.7066\,\mathrm{kg/m}$ \\
+$C_a$     & Added-mass coefficient      & $1.0$ \\
+$\omega$  & Angular forcing frequency   & $2\pi f$ (see paper) \\
+$A_x,A_z$ & Fairlead motion amplitudes  & (given in main paper) \\
+$U_c,V_c$ & Current components          & (given in main paper) \\ \bottomrule
+\end{tabular}
+\caption{Model parameters used in the pseudocode description.}
+\label{tab:params}
+\end{table}
+
+\newpage
+
+\section*{Algorithm S1: Static Configuration (Pseudocode)}
+
+\begin{algorithm}[h!]
+\caption{Static configuration of the cable (non-executable pseudocode)}
+\begin{algorithmic}[1]
+\STATE Discretize arc length:
+\[
+s_i = \frac{i-1}{N-1}L,\quad i=1,\dots,N.
+\]
+\STATE Initialize arrays:
+\begin{itemize}
+  \item $\phi_{\text{s}}[i]$ \hfill (initial angle guess, e.g.\ catenary);
+  \item $e_{\text{s}}[i]$ \hfill (initial axial strain guess).
+\end{itemize}
+\STATE For each interior node $i=2,\dots,N-1$:
+\begin{itemize}
+  \item approximate derivatives of $\phi_{\text{s}}$ w.r.t.\ $s$ by finite differences;
+  \item compute curvature and curvature derivatives;
+  \item set $T[i] = EA\,e_{\text{s}}[i]$ and approximate $dT/ds$ by central differences;
+  \item form vertical and horizontal equilibrium residuals,
+  representing bending, tension and weight balance at node $i$.
+\end{itemize}
+\STATE Impose boundary conditions by reconstructing geometry from
+$(1+e_{\text{s}})[\cos\phi_{\text{s}},\sin\phi_{\text{s}}]$ so that
+\[
+(x,z)(0) = (0,0),\quad (x,z)(L) = (x_{\text{end}},z_{\text{end}}).
+\]
+\STATE Solve the nonlinear system for $\phi_{\text{s}}$ and $e_{\text{s}}$
+using an iterative method (e.g.\ Newton-type) until all residuals and
+boundary errors fall below a prescribed tolerance.
+\STATE Return static fields $\phi_{\text{s}}[i]$ and $e_{\text{s}}[i]$.
+\end{algorithmic}
+\end{algorithm}
+
+\section*{Algorithm S2: Time-Domain Dynamic Solver (Pseudocode)}
+
+\begin{algorithm}[h!]
+\caption{Time-domain simulation (non-executable pseudocode)}
+\begin{algorithmic}[1]
+\STATE Define dynamic state variables at node $i$:
+\[
+u[i](t),\; v[i](t),\; e[i](t),\; \phi[i](t).
+\]
+\STATE Initialize at $t=0$:
+\[
+u[i]=0,\quad v[i]=0,\quad e[i]=0,\quad \phi[i]=0\quad \forall i.
+\]
+\STATE For a given time $t$:
+\begin{enumerate}
+\item Compute fairlead velocity in global coordinates from the prescribed motion:
+\[
+\dot X_f(t)=A_x\,\omega(-\sin\omega t),\quad
+\dot Z_f(t)=A_z\,\omega(\cos\omega t).
+\]
+\item Project $(\dot X_f,\dot Z_f)$ onto the local tangent/normal at node $N$
+using the static angle plus dynamic correction; set $u[N]$, $v[N]$ accordingly.
+\item Enforce anchored-end boundary conditions:
+\[
+u[1]=0,\quad v[1]=0.
+\]
+\end{enumerate}
+\STATE For each interior node $i=2,\dots,N-1$:
+\begin{enumerate}
+\item Approximate spatial derivatives $du/ds$, $dv/ds$, $de/ds$, $d\phi/ds$ using
+finite differences.
+\item Define relative fluid velocities using the static orientation:
+\[
+u_{\text{rel}} = u - (U_c\cos\phi_{\text{s}}+V_c\sin\phi_{\text{s}}),
+\]
+\[
+v_{\text{rel}} = v - (-U_c\sin\phi_{\text{s}}+V_c\cos\phi_{\text{s}}).
+\]
+\item Compute drag forces:
+\[
+F_t = -\tfrac12 \rho_w d C_d^t |u_{\text{rel}}|u_{\text{rel}}\sqrt{1+e},\quad
+F_n = -\tfrac12 \rho_w d C_d^n |v_{\text{rel}}|v_{\text{rel}}\sqrt{1+e}.
+\]
+\item Assemble semi-discrete equations for each node:
+\begin{align*}
+\frac{du}{dt}   &= \frac{1}{m}\big[\text{bending terms} +
+EA\,\frac{de}{ds} - W\,\phi\cos\phi_{\text{s}} + F_t\big],\\
+\frac{dv}{dt}   &= \frac{1}{m+m_a}\big[\text{bending terms} +
+T_{\text{s}}\frac{d\phi}{ds} + EA\,e\,\frac{d\phi_{\text{s}}}{ds}
++ W\,\phi\sin\phi_{\text{s}} + F_n\big],\\
+\frac{de}{dt}   &= \frac{du}{ds} - v\,\frac{d\phi_{\text{s}}}{ds},\\
+\frac{d\phi}{dt}&= \frac{dv}{ds} + u\,\frac{d\phi_{\text{s}}}{ds},
+\end{align*}
+where $T_{\text{s}}$ is the static tension field and ``bending terms''
+collect contributions proportional to $EI$ and higher spatial derivatives
+of $\phi$.
+\end{enumerate}
+\STATE Advance the state $y(t)=\{u,v,e,\phi\}$ from $t$ to $t+\Delta t$ using a
+standard ODE time integrator (e.g.\ explicit Runge--Kutta). Repeat until
+$t$ reaches $t_{\text{final}}$.
+\end{algorithmic}
+\end{algorithm}
+
+\section*{Algorithm S3: Post-Processing (Pseudocode)}
+
+\begin{algorithm}[h!]
+\caption{Shape reconstruction and fairlead tension (non-executable pseudocode)}
+\begin{algorithmic}[1]
+\STATE At time $t_k$, compute total angle and strain:
+\[
+\phi_{\text{tot}}[i]=\phi_{\text{s}}[i]+\phi[i](t_k),\quad
+e_{\text{tot}}[i]=e_{\text{s}}[i]+e[i](t_k).
+\]
+\STATE Reconstruct cable shape:
+\[
+x[1]=0,\quad z[1]=0,
+\]
+\[
+x[i+1]=x[i] + ds\,(1+e_{\text{tot}}[i])\cos\phi_{\text{tot}}[i],
+\]
+\[
+z[i+1]=z[i] + ds\,(1+e_{\text{tot}}[i])\sin\phi_{\text{tot}}[i],
+\]
+for $i=1,\dots,N-1$.
+\STATE Compute fairlead tension:
+\[
+T_f(t_k)=T_{\text{s}}[N] + EA\,e[N](t_k),
+\]
+where $T_{\text{s}}[N]$ is the static tension at the fairlead.
+\STATE Use $T_f(t)$ and the reconstructed shape $(x_i(t),z_i(t))$ for plotting
+and comparison with the results shown in the main article.
+\end{algorithmic}
+\end{algorithm}
+
+\newpage
+\section*{Flow Diagram of the Workflow}
+
+\begin{figure}[h!]
+\centering
+\small
+\begin{tikzpicture}[
+    node distance=0.65cm,
+    block/.style={rectangle, draw, rounded corners, thick,
+                  text width=5cm, align=center, minimum height=0.7cm,
+                  inner sep=2pt},
+    term/.style={ellipse, draw, thick,
+                 minimum width=1.8cm, minimum height=0.6cm},
+    decision/.style={diamond, draw, thick, aspect=1.6,
+                     inner sep=1pt, align=center, text width=1.7cm},
+    line/.style={-Stealth, thick}
+]
+
+\node[term] (start) {Start};
+
+\node[block, below=of start] (input)
+    {Input physical \& numerical parameters};
+
+\node[block, below=of input] (static)
+    {Static configuration:\\ solve for $\phi_{\text{s}}(s)$, $e_{\text{s}}(s)$};
+
+\node[block, below=of static] (init)
+    {Initialize dynamic state at $t=0$};
+
+\node[block, below=of init] (bc)
+    {Apply BCs at anchor and fairlead};
+
+\node[block, below=of bc] (forces)
+    {Compute relative velocities and hydrodynamic forces};
+
+\node[block, below=of forces] (rhs)
+    {Assemble semi-discrete ODE system};
+
+\node[block, below=of rhs] (step)
+    {Advance state one time step};
+
+\node[decision, below=of step] (loop)
+    {$t < t_f$ ?};
+
+\node[block, below=of loop, yshift=-0.2cm] (post)
+    {Reconstruct shape \& compute fairlead tension};
+
+\node[term, below=of post] (end) {End};
+
+\draw[line] (start) -- (input);
+\draw[line] (input) -- (static);
+\draw[line] (static) -- (init);
+\draw[line] (init) -- (bc);
+\draw[line] (bc) -- (forces);
+\draw[line] (forces) -- (rhs);
+\draw[line] (rhs) -- (step);
+\draw[line] (step) -- (loop);
+\draw[line] (loop) -- node[right]{No} (post);
+\draw[line] (post) -- (end);
+
+\draw[line] (loop.west) -- ++(-1.5,0) -- ++(0,4.4) -- (bc.west)
+    node[midway,left]{Yes};
+
+\caption{Compact flow diagram of the numerical procedure.}
+\end{tikzpicture}
+\end{figure}
+
+\section*{Notes}
+
+\begin{itemize}
+  \item The pseudocode above is intentionally high-level and omits specific
+        finite-difference stencils, solver tolerances and implementation details.
+  \item This document is non-executable and contains no MATLAB or other runnable
+        source code.
+  \item The full MATLAB implementation used in the article is proprietary and
+        may be shared, upon reasonable request, with bona fide researchers for
+        academic, non-commercial purposes.
+\end{itemize}
+
+\end{document}
