@@ -18,7 +18,6 @@ Contents:
 - Description of numerical workflow (static solver, dynamic solver, force model)
 
 For academic, non-commercial collaboration requests, the full MATLAB code may be shared in a 
-controlled manner. Please contact:
+controlled manner. 
 
-**Dr. Susam Boral**  
-Email: *[your email]*
+
