@@ -13,8 +13,8 @@ of the numerical workflow and enable independent re-implementation.
 
 Contents:
 
-- `pseudocode_flowchart.tex` — LaTeX source for the algorithm flowchart  
-- `figures/flowchart.pdf` — compiled diagram  
+- `pseudocode.tex` — LaTeX source for the code algorithm and code flowchart  
+- `Pseudocode.pdf` — compiled diagram  
 - Description of numerical workflow (static solver, dynamic solver, force model)
 
 For academic, non-commercial collaboration requests, the full MATLAB code may be shared in a 
